@@ -1,0 +1,930 @@
+{
+  "name": "AI-Powered HR Automation System",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "# 🤖 AI-Powered HR Automation System\n\n## Pipeline Overview\n\n**PIPELINE A — Setup (Run Once)**\n1. Paste Job Description → Create BeyondPresence Interview Agent → Save to Sheets\n\n**PIPELINE B — Resume Intake via Telegram**\n1. Candidate sends resume PDF to Telegram Bot\n2. GPT-4.1-mini analyzes resume, scores fit & extracts structured data\n3. Shortlisted candidates receive interview link via Telegram\n4. Rejected candidates receive polite rejection via Telegram\n\n**PIPELINE C — Interview Analysis (Auto)**\n1. BeyondPresence webhook fires when interview ends\n2. GPT-4.1-mini analyzes transcript → saves to Google Sheets\n3. Selected candidates receive personalized Offer Letter PDF via Telegram\n\n**PIPELINE D — Onboarding Timesheet (Auto)**\n1. Gmail monitors for onboarding confirmation emails\n2. Google Calendar events are synced\n3. Timesheet is auto-generated in Google Sheets",
+        "height": 620,
+        "width": 700,
+        "color": 5
+      },
+      "id": "note-main-overview",
+      "name": "🗺️ System Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [-400, -200],
+      "typeVersion": 1
+    },
+
+    {
+      "parameters": {
+        "content": "## 📝 PIPELINE A — Step 1\nPaste your Job Description in the Code node below and click the Manual Trigger to create your BeyondPresence Interview Agent.\n\n**Run this ONCE before activating the workflow.**",
+        "height": 200,
+        "width": 420,
+        "color": 7
+      },
+      "id": "note-pipeline-a",
+      "name": "Pipeline A Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [400, -200],
+      "typeVersion": 1
+    },
+
+    {
+      "parameters": {},
+      "id": "trigger-manual-setup",
+      "name": "▶️ Start Setup (Run Once)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "position": [400, 80],
+      "typeVersion": 1
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// PASTE YOUR JOB DESCRIPTION BETWEEN THE BACKTICKS BELOW\n// ============================================================\n\nconst jobDescription = `\nSoftware Engineer – AI Products\n\nWe are looking for a talented Software Engineer to join our AI team.\n\nResponsibilities:\n- Design and build scalable backend services and APIs\n- Collaborate with cross-functional teams on AI-driven product features\n- Write clean, well-tested code in Python and/or JavaScript\n- Participate in code reviews and architectural discussions\n\nRequirements:\n- 3+ years of software engineering experience\n- Proficiency in Python, JavaScript/TypeScript\n- Experience with REST APIs and cloud platforms (AWS/GCP/Azure)\n- Familiarity with ML/AI concepts is a plus\n- Strong problem-solving and communication skills\n\nWe offer competitive salary, remote-friendly environment, and growth opportunities.\n`;\n\nreturn [{\n  json: {\n    jobDescription: jobDescription.trim(),\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-job-description",
+      "name": "📝 Your Job Description",
+      "type": "n8n-nodes-base.code",
+      "position": [620, 80],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const jobDescription = $input.first().json.jobDescription;\n\nconst systemPrompt = `You are a professional AI HR interviewer for a tech company. Your goal is to assess candidates in a friendly, structured conversation.\n\nJob Description:\n${jobDescription}\n\nInterview Guidelines:\n- Start with a warm welcome\n- Ask about their background and motivation for applying\n- Explore relevant technical experience with real examples\n- Assess problem-solving and communication skills\n- Allow time for candidate questions\n- Close professionally with next steps\n\nBe conversational, empathetic, and thorough. Ask smart follow-up questions.`;\n\nconst welcomeMessage = `Hello! Welcome and thank you for applying. I'm your AI interviewer today. Let's start — could you briefly introduce yourself and tell me what excites you most about this opportunity?`;\n\nreturn [{\n  json: {\n    jobDescription,\n    systemPrompt,\n    welcomeMessage,\n    agentName: `HR Bot – ${new Date().toLocaleDateString()}`\n  }\n}];"
+      },
+      "id": "code-prepare-agent",
+      "name": "Prepare Interview Agent",
+      "type": "n8n-nodes-base.code",
+      "position": [840, 80],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "systemPrompt": "={{ $json.systemPrompt }}",
+        "name": "={{ $json.agentName }}",
+        "greeting": "={{ $json.welcomeMessage }}"
+      },
+      "id": "node-create-bp-agent",
+      "name": "Create BeyondPresence Agent",
+      "type": "n8n-nodes-beyondpresence.beyondPresence",
+      "position": [1060, 80],
+      "typeVersion": 1,
+      "credentials": {
+        "beyondPresenceApi": {
+          "id": "YOUR_BEYOND_PRESENCE_CRED_ID",
+          "name": "Beyond Presence account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const workflowStaticData = $getWorkflowStaticData('global');\n\nconst agentId = $input.first().json.id;\nconst interviewLink = $input.first().json.call_link;\nconst jobDescription = $('Prepare Interview Agent').first().json.jobDescription;\n\nworkflowStaticData.agentId = agentId;\nworkflowStaticData.jobDescription = jobDescription;\nworkflowStaticData.interviewLink = interviewLink;\n\nreturn [{\n  json: {\n    'Agent ID': agentId,\n    'Agent Name': $('Prepare Interview Agent').first().json.agentName,\n    'Interview Link': interviewLink,\n    'Job Description': jobDescription,\n    'System Prompt': $('Prepare Interview Agent').first().json.systemPrompt,\n    'Welcome Message': $('Prepare Interview Agent').first().json.welcomeMessage\n  }\n}];"
+      },
+      "id": "code-save-agent-info",
+      "name": "Save Agent Info",
+      "type": "n8n-nodes-base.code",
+      "position": [1280, 80],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Interview Agents"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Agent ID": "={{ $json['Agent ID'] }}",
+            "Agent Name": "={{ $json['Agent Name'] }}",
+            "Interview Link": "={{ $json['Interview Link'] }}",
+            "Job Description": "={{ $json['Job Description'] }}",
+            "System Prompt": "={{ $json['System Prompt'] }}",
+            "Welcome Message": "={{ $json['Welcome Message'] }}"
+          },
+          "matchingColumns": ["Agent ID"],
+          "schema": [
+            {"id": "Agent ID", "displayName": "Agent ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false},
+            {"id": "Agent Name", "displayName": "Agent Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Interview Link", "displayName": "Interview Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Job Description", "displayName": "Job Description", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "System Prompt", "displayName": "System Prompt", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true},
+            {"id": "Welcome Message", "displayName": "Welcome Message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true}
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets-save-agent",
+      "name": "Save Agent to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1500, 80],
+      "typeVersion": 4.6,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "content": "## 📱 PIPELINE B — Telegram Resume Intake\nCandidates send their resume PDF to your Telegram bot.\nGPT-4.1-mini scores and screens them automatically.\nShortlisted → get interview link. Rejected → polite message.",
+        "height": 200,
+        "width": 500,
+        "color": 6
+      },
+      "id": "note-pipeline-b",
+      "name": "Pipeline B Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [400, 480],
+      "typeVersion": 1
+    },
+
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "id": "trigger-telegram",
+      "name": "📱 Telegram Resume Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "position": [400, 720],
+      "webhookId": "telegram-resume-intake",
+      "typeVersion": 1.1,
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-document",
+              "operator": {"type": "object", "operation": "exists"},
+              "leftValue": "={{ $json.message.document }}",
+              "rightValue": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-document",
+      "name": "Has Resume Attached?",
+      "type": "n8n-nodes-base.if",
+      "position": [620, 720],
+      "typeVersion": 2.1
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "👋 Hello! Please send your resume as a PDF file to apply for this position. Make sure to attach the PDF directly in this chat.",
+        "additionalFields": {}
+      },
+      "id": "telegram-ask-resume",
+      "name": "Ask for Resume",
+      "type": "n8n-nodes-base.telegram",
+      "position": [620, 900],
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $credentials.token }}/getFile?file_id={{ $json.message.document.file_id }}",
+        "options": {}
+      },
+      "id": "http-get-file-path",
+      "name": "Get File Path from Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [840, 720],
+      "typeVersion": 4.2
+    },
+
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/file/bot{{ $credentials.token }}/{{ $json.result.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "http-download-resume",
+      "name": "Download Resume PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [1060, 720],
+      "typeVersion": 4.2
+    },
+
+    {
+      "parameters": {
+        "operation": "extractText",
+        "options": {}
+      },
+      "id": "extract-pdf-text",
+      "name": "Extract Text from PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "position": [1280, 720],
+      "typeVersion": 1
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const resumeText = $input.first().json.text || $input.first().json.data || '';\nconst candidateName = $('📱 Telegram Resume Trigger').first().json.message.from.first_name + ' ' + ($('📱 Telegram Resume Trigger').first().json.message.from.last_name || '');\nconst chatId = $('📱 Telegram Resume Trigger').first().json.message.chat.id;\nconst telegramUsername = $('📱 Telegram Resume Trigger').first().json.message.from.username || 'N/A';\n\nreturn [{\n  json: {\n    resumeText: resumeText.trim(),\n    candidateName: candidateName.trim(),\n    chatId,\n    telegramUsername\n  }\n}];"
+      },
+      "id": "code-prep-resume",
+      "name": "Prepare Resume Data",
+      "type": "n8n-nodes-base.code",
+      "position": [1500, 720],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4.1-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an expert HR recruiter AI. Analyze the following resume against the job description and return a structured JSON assessment.\n\nJob Description:\n{{ $getWorkflowStaticData('global').jobDescription }}\n\nCandidate: {{ $json.candidateName }}\n\nResume Text:\n{{ $json.resumeText }}\n\nAnalyze and return ONLY valid JSON in this exact format (no extra text):\n```json\n{\n  \"candidateName\": \"Full name from resume\",\n  \"email\": \"email from resume or N/A\",\n  \"phone\": \"phone from resume or N/A\",\n  \"yearsExperience\": 5,\n  \"currentRole\": \"Current/last job title\",\n  \"topSkills\": [\"skill1\", \"skill2\", \"skill3\"],\n  \"fitScore\": 78,\n  \"shortlisted\": true,\n  \"strengths\": [\"strength1\", \"strength2\"],\n  \"gaps\": [\"gap1\"],\n  \"summary\": \"2-3 sentence overall assessment\",\n  \"rejectionReason\": \"Reason if not shortlisted, or empty string\"\n}\n```\n\nShortlist if fitScore >= 60. Be objective and fair.",
+              "role": "system"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "openai-analyze-resume",
+      "name": "🤖 Analyze Resume (GPT-4.1-mini)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1720, 720],
+      "typeVersion": 1,
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CRED_ID",
+          "name": "OpenAI account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const analysisText = $input.first().json.message.content;\nlet analysis;\ntry {\n  const jsonMatch = analysisText.match(/```json\\n([\\s\\S]*?)\\n```/);\n  if (jsonMatch) {\n    analysis = JSON.parse(jsonMatch[1]);\n  } else {\n    analysis = JSON.parse(analysisText);\n  }\n} catch(e) {\n  analysis = {\n    candidateName: $('Prepare Resume Data').first().json.candidateName,\n    email: 'N/A', phone: 'N/A', yearsExperience: 0,\n    currentRole: 'Unknown', topSkills: [],\n    fitScore: 0, shortlisted: false,\n    strengths: [], gaps: ['Could not parse resume'],\n    summary: 'Analysis failed - please review manually.',\n    rejectionReason: 'Automated parsing error'\n  };\n}\n\nconst chatId = $('Prepare Resume Data').first().json.chatId;\nconst telegramUsername = $('Prepare Resume Data').first().json.telegramUsername;\nconst interviewLink = $getWorkflowStaticData('global').interviewLink;\n\nreturn [{\n  json: {\n    ...analysis,\n    chatId,\n    telegramUsername,\n    interviewLink,\n    appliedDate: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "code-parse-resume-analysis",
+      "name": "Parse Resume Analysis",
+      "type": "n8n-nodes-base.code",
+      "position": [1940, 720],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Candidates"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {"id": "candidateName", "displayName": "Candidate Name", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": true},
+            {"id": "email", "displayName": "Email", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": true},
+            {"id": "phone", "displayName": "Phone", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": true},
+            {"id": "telegramUsername", "displayName": "Telegram Username", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": true},
+            {"id": "currentRole", "displayName": "Current Role", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": true},
+            {"id": "yearsExperience", "displayName": "Years Experience", "type": "number", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "topSkills", "displayName": "Top Skills", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "fitScore", "displayName": "Fit Score", "type": "number", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "shortlisted", "displayName": "Shortlisted", "type": "boolean", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "strengths", "displayName": "Strengths", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "gaps", "displayName": "Gaps", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "summary", "displayName": "Summary", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "appliedDate", "displayName": "Applied Date", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false}
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "sheets-log-candidate",
+      "name": "Log Candidate to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [2160, 720],
+      "typeVersion": 4.6,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-shortlisted",
+              "operator": {"type": "boolean", "operation": "true"},
+              "leftValue": "={{ $json.shortlisted }}",
+              "rightValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-shortlisted",
+      "name": "Is Candidate Shortlisted?",
+      "type": "n8n-nodes-base.if",
+      "position": [2380, 720],
+      "typeVersion": 2.1
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=🎉 *Congratulations {{ $json.candidateName }}!*\n\nWe've reviewed your resume and we're impressed with your profile (Fit Score: *{{ $json.fitScore }}/100*).\n\n📋 *Your Strengths:*\n{{ $json.strengths.join('\\n• ') }}\n\n*You've been shortlisted for a video interview!*\n\n🎥 *Your Interview Link:*\n{{ $json.interviewLink }}\n\nClick the link above when you're ready in a quiet environment. The AI interviewer will guide you through the process.\n\nBest of luck! 🚀",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-send-interview-link",
+      "name": "Send Interview Link (Shortlisted)",
+      "type": "n8n-nodes-base.telegram",
+      "position": [2600, 620],
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "=Dear {{ $json.candidateName }},\n\nThank you for your interest in our position and for taking the time to apply.\n\nAfter carefully reviewing your application (Fit Score: {{ $json.fitScore }}/100), we regret to inform you that we will not be moving forward with your application at this time.\n\n*Reason:* {{ $json.rejectionReason }}\n\nWe encourage you to apply for future openings that may be a better match. We wish you all the best in your job search! 🙏",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-send-rejection",
+      "name": "Send Rejection Message",
+      "type": "n8n-nodes-base.telegram",
+      "position": [2600, 880],
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "content": "## 🎙️ PIPELINE C — Interview Analysis & Offer Letters\nBeyondPresence fires a webhook when an interview ends.\nGPT-4.1-mini analyzes the transcript → results saved to Sheets.\nTop candidates (fitScore ≥ 80) get a personalized PDF Offer Letter via Telegram.",
+        "height": 200,
+        "width": 600,
+        "color": 4
+      },
+      "id": "note-pipeline-c",
+      "name": "Pipeline C Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [400, 1100],
+      "typeVersion": 1
+    },
+
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "beyondpresence-hr-interviews",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-bp-interview",
+      "name": "Receive Interview Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [400, 1340],
+      "webhookId": "beyondpresence-hr-interviews",
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"success\", \"message\": \"Interview received and being analyzed\"}",
+        "options": {}
+      },
+      "id": "webhook-confirm-receipt",
+      "name": "Confirm Receipt",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [620, 1340],
+      "typeVersion": 1.2
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const workflowStaticData = $getWorkflowStaticData('global');\nconst MY_AGENT_ID = workflowStaticData.agentId;\nconst jobDescription = workflowStaticData.jobDescription;\nconst webhookData = $input.first().json.body;\nconst receivedAgentId = webhookData.agent_id || webhookData.agentId || (webhookData.call_data && webhookData.call_data.agent_id);\n\nif (receivedAgentId === MY_AGENT_ID && webhookData.event_type === 'call_ended') {\n  return [{ json: { process: true, jobDescription, webhookData } }];\n} else {\n  return [{ json: { process: false, reason: receivedAgentId !== MY_AGENT_ID ? 'Different agent' : 'Call not finished yet' } }];\n}"
+      },
+      "id": "code-data-checks",
+      "name": "Data Checks",
+      "type": "n8n-nodes-base.code",
+      "position": [840, 1340],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"version": 1, "leftValue": "", "caseSensitive": true, "typeValidation": "strict"},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-process",
+              "operator": {"type": "boolean", "operation": "true"},
+              "leftValue": "={{ $json.process }}",
+              "rightValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-process-interview",
+      "name": "Is Our Interview?",
+      "type": "n8n-nodes-base.if",
+      "position": [1060, 1340],
+      "typeVersion": 2.1
+    },
+
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4.1-mini"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Analyze this AI-conducted job interview and provide a comprehensive hiring assessment.\n\nJob Description:\n{{ $getWorkflowStaticData('global').jobDescription }}\n\nCandidate: {{ $json.webhookData.call_data.userName }}\nInterview Date: {{ $now }}\nDuration: {{ $json.webhookData.evaluation.duration_minutes }} minutes\n\nInterview Transcript:\n{{ $json.webhookData.messages.map(m => `[${m.sent_at}] ${m.sender.toUpperCase()}: ${m.message}`).join('\\n') }}\n\nReturn ONLY valid JSON in this exact format:\n```json\n{\n  \"fitScore\": 85,\n  \"recommendation\": \"strongly_recommend\",\n  \"strengths\": [\"strength 1\", \"strength 2\"],\n  \"concerns\": [\"concern 1\"],\n  \"summary\": \"2-3 sentence assessment\",\n  \"nextSteps\": [\"action 1\", \"action 2\"],\n  \"technicalScore\": 80,\n  \"communicationScore\": 90,\n  \"cultureFitScore\": 85,\n  \"offerRecommended\": true\n}\n```\nSet offerRecommended=true only if fitScore >= 80. recommendation values: strongly_recommend, recommend, maybe, reject.",
+              "role": "system"
+            }
+          ]
+        },
+        "options": {"temperature": 0.3}
+      },
+      "id": "openai-analyze-interview",
+      "name": "🤖 Analyze Interview (GPT-4.1-mini)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [1280, 1340],
+      "typeVersion": 1,
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CRED_ID",
+          "name": "OpenAI account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const analysisText = $input.first().json.message.content;\nlet analysis;\ntry {\n  const jsonMatch = analysisText.match(/```json\\n([\\s\\S]*?)\\n```/);\n  analysis = JSON.parse(jsonMatch ? jsonMatch[1] : analysisText);\n} catch(e) {\n  analysis = { fitScore: 0, recommendation: 'error', strengths: [], concerns: ['Parse error'], summary: 'Manual review required', nextSteps: ['Review manually'], technicalScore: 0, communicationScore: 0, cultureFitScore: 0, offerRecommended: false };\n}\n\nconst webhookData = $('Is Our Interview?').first().json.webhookData;\n\nreturn [{\n  json: {\n    'Candidate Name': webhookData.call_data.userName,\n    'Interview Date': $now,\n    'Duration (minutes)': webhookData.evaluation.duration_minutes,\n    'Fit Score': analysis.fitScore,\n    'Technical Score': analysis.technicalScore,\n    'Communication Score': analysis.communicationScore,\n    'Culture Fit Score': analysis.cultureFitScore,\n    'Recommendation': analysis.recommendation,\n    'Strengths': Array.isArray(analysis.strengths) ? analysis.strengths.join('; ') : '',\n    'Concerns': Array.isArray(analysis.concerns) ? analysis.concerns.join('; ') : 'None',\n    'Summary': analysis.summary,\n    'Next Steps': Array.isArray(analysis.nextSteps) ? analysis.nextSteps.join('; ') : '',\n    'Offer Recommended': analysis.offerRecommended,\n    'Call ID': webhookData.call_id,\n    'Analyzed On': $now,\n    offerRecommended: analysis.offerRecommended,\n    candidateName: webhookData.call_data.userName\n  }\n}];"
+      },
+      "id": "code-format-interview-results",
+      "name": "Format Interview Results",
+      "type": "n8n-nodes-base.code",
+      "position": [1500, 1340],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Interview Results"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {"id": "Candidate Name", "displayName": "Candidate Name", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": true},
+            {"id": "Interview Date", "displayName": "Interview Date", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Duration (minutes)", "displayName": "Duration (minutes)", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Fit Score", "displayName": "Fit Score", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Technical Score", "displayName": "Technical Score", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Communication Score", "displayName": "Communication Score", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Culture Fit Score", "displayName": "Culture Fit Score", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Recommendation", "displayName": "Recommendation", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Strengths", "displayName": "Strengths", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Concerns", "displayName": "Concerns", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Summary", "displayName": "Summary", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Next Steps", "displayName": "Next Steps", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Offer Recommended", "displayName": "Offer Recommended", "type": "boolean", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Call ID", "displayName": "Call ID", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Analyzed On", "displayName": "Analyzed On", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false}
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "sheets-save-interview-results",
+      "name": "Save Interview Results to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1720, 1340],
+      "typeVersion": 4.6,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2},
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "check-offer",
+              "operator": {"type": "boolean", "operation": "true"},
+              "leftValue": "={{ $json.offerRecommended }}",
+              "rightValue": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-offer-recommended",
+      "name": "Offer Recommended?",
+      "type": "n8n-nodes-base.if",
+      "position": [1940, 1340],
+      "typeVersion": 2.1
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const candidateName = $json.candidateName || $json['Candidate Name'];\nconst fitScore = $json['Fit Score'] || $json.fitScore;\nconst today = new Date();\nconst startDate = new Date(today);\nstartDate.setDate(today.getDate() + 30);\nconst startDateStr = startDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });\nconst todayStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });\n\nconst offerContent = `OFFER LETTER\n\n${todayStr}\n\nDear ${candidateName},\n\nWe are delighted to extend this formal offer of employment to join our team.\n\nPOSITION DETAILS\n----------------\nPosition: Software Engineer – AI Products\nDepartment: Engineering\nReporting To: Head of Engineering\nEmployment Type: Full-Time\nStart Date: ${startDateStr}\n\nCOMPENSATION\n------------\nAnnual Salary: Competitive (to be discussed)\nPerformance Bonus: Up to 15% of annual salary\nStock Options: To be discussed\n\nBENEFITS\n--------\n• Health Insurance (Medical, Dental, Vision)\n• 21 Days Paid Annual Leave\n• Remote-Friendly Work Environment\n• Learning & Development Budget\n• Latest Equipment Provided\n\nYour exceptional performance during the interview process (AI Assessment Score: ${fitScore}/100) has demonstrated the skills and dedication we value highly.\n\nTo accept this offer, please sign and return this letter within 5 business days.\n\nWe look forward to welcoming you to the team!\n\nWarm regards,\n\n[HR Manager Name]\nHuman Resources Department\n[Company Name]\n[Company Address]\n[Company Email] | [Company Phone]\n\n---\nAcceptance Signature: ________________________\nDate: ________________________\nCandidateName: ${candidateName}`;\n\nreturn [{\n  json: {\n    candidateName,\n    fitScore,\n    offerContent,\n    todayStr,\n    startDateStr\n  }\n}];"
+      },
+      "id": "code-generate-offer-content",
+      "name": "Generate Offer Letter Content",
+      "type": "n8n-nodes-base.code",
+      "position": [2160, 1240],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Generate PDF as base64 using a simple HTML-to-text approach\n// In production, use a PDF generation service or n8n's HTML node\n// This node prepares the offer data for Telegram document send\n\nconst candidateName = $json.candidateName;\nconst offerContent = $json.offerContent;\n\n// Encode content as base64 for file transmission\nconst base64Content = Buffer.from(offerContent, 'utf-8').toString('base64');\n\nreturn [{\n  json: {\n    candidateName,\n    offerContent,\n    base64Content,\n    fileName: `Offer_Letter_${candidateName.replace(/\\s+/g, '_')}.txt`,\n    fitScore: $json.fitScore\n  }\n}];"
+      },
+      "id": "code-prepare-offer-pdf",
+      "name": "Prepare Offer Letter File",
+      "type": "n8n-nodes-base.code",
+      "position": [2380, 1240],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{ $credentials.token }}/sendDocument",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $('Is Our Interview?').first().json.webhookData.call_data.userId || 'HR_TEAM_CHAT_ID' }}\",\n  \"caption\": \"🎉 *Congratulations {{ $json.candidateName }}!*\\n\\nYour offer letter is attached below. Please review and sign within 5 business days.\\n\\n📊 Interview Score: *{{ $json.fitScore }}/100*\",\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      },
+      "id": "telegram-send-offer",
+      "name": "Send Offer via Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [2600, 1240],
+      "typeVersion": 4.2
+    },
+
+    {
+      "parameters": {
+        "content": "## 📅 PIPELINE D — Onboarding Timesheet\nGmail monitors for onboarding confirmation emails.\nGoogle Calendar syncs new hire's schedule.\nTimesheet auto-created in Google Sheets for HR records.",
+        "height": 200,
+        "width": 600,
+        "color": 3
+      },
+      "id": "note-pipeline-d",
+      "name": "Pipeline D Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [400, 1740],
+      "typeVersion": 1
+    },
+
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [{"mode": "everyHour"}]
+        },
+        "filters": {
+          "readStatus": "unread",
+          "subject": "onboarding"
+        }
+      },
+      "id": "trigger-gmail-onboarding",
+      "name": "📧 Gmail Onboarding Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "position": [400, 1980],
+      "typeVersion": 1,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CRED_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const email = $input.first().json;\nconst subject = email.subject || '';\nconst snippet = email.snippet || '';\nconst from = email.from || '';\n\n// Extract employee name from subject or snippet\nconst nameMatch = subject.match(/onboarding[:\\s-]+([A-Za-z\\s]+)/i) || snippet.match(/welcome[:\\s]+([A-Za-z\\s]+)/i);\nconst employeeName = nameMatch ? nameMatch[1].trim() : 'New Employee';\n\n// Extract email\nconst emailMatch = from.match(/[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}/);\nconst employeeEmail = emailMatch ? emailMatch[0] : 'unknown@company.com';\n\nconst startDate = new Date();\nconst startDateISO = startDate.toISOString();\n\nreturn [{\n  json: {\n    employeeName,\n    employeeEmail,\n    startDate: startDateISO,\n    emailSubject: subject,\n    emailSnippet: snippet,\n    department: 'Engineering',\n    position: 'Software Engineer – AI Products'\n  }\n}];"
+      },
+      "id": "code-extract-onboarding-data",
+      "name": "Extract Onboarding Data",
+      "type": "n8n-nodes-base.code",
+      "position": [620, 1980],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "id",
+          "value": "primary"
+        },
+        "timeMin": "={{ $now }}",
+        "timeMax": "={{ $now.plus(30, 'days').toISO() }}",
+        "options": {
+          "maxResults": 50,
+          "singleEvents": true,
+          "orderBy": "startTime"
+        }
+      },
+      "id": "gcal-fetch-events",
+      "name": "Fetch Google Calendar Events",
+      "type": "n8n-nodes-base.googleCalendar",
+      "position": [840, 1980],
+      "typeVersion": 1.3,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "YOUR_GCAL_CRED_ID",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "jsCode": "const calendarEvents = $input.all();\nconst onboardingData = $('Extract Onboarding Data').first().json;\n\n// Build timesheet rows from calendar events\nconst timesheetRows = calendarEvents.map(event => {\n  const e = event.json;\n  const start = e.start ? (e.start.dateTime || e.start.date) : 'N/A';\n  const end = e.end ? (e.end.dateTime || e.end.date) : 'N/A';\n  \n  let durationHours = 0;\n  if (e.start && e.start.dateTime && e.end && e.end.dateTime) {\n    const diff = new Date(e.end.dateTime) - new Date(e.start.dateTime);\n    durationHours = Math.round((diff / 3600000) * 10) / 10;\n  }\n  \n  return {\n    'Employee Name': onboardingData.employeeName,\n    'Employee Email': onboardingData.employeeEmail,\n    'Department': onboardingData.department,\n    'Position': onboardingData.position,\n    'Event Title': e.summary || 'Untitled',\n    'Date': start.split('T')[0],\n    'Start Time': start.includes('T') ? start.split('T')[1].split('+')[0].substring(0, 5) : '09:00',\n    'End Time': end.includes('T') ? end.split('T')[1].split('+')[0].substring(0, 5) : '17:00',\n    'Duration (hrs)': durationHours || 8,\n    'Category': e.summary && e.summary.toLowerCase().includes('training') ? 'Training' : 'Onboarding Activity',\n    'Status': 'Scheduled',\n    'Created On': new Date().toISOString()\n  };\n});\n\nif (timesheetRows.length === 0) {\n  // Default row if no calendar events\n  timesheetRows.push({\n    'Employee Name': onboardingData.employeeName,\n    'Employee Email': onboardingData.employeeEmail,\n    'Department': onboardingData.department,\n    'Position': onboardingData.position,\n    'Event Title': 'First Day Orientation',\n    'Date': new Date().toISOString().split('T')[0],\n    'Start Time': '09:00',\n    'End Time': '17:00',\n    'Duration (hrs)': 8,\n    'Category': 'Onboarding Activity',\n    'Status': 'Scheduled',\n    'Created On': new Date().toISOString()\n  });\n}\n\nreturn timesheetRows.map(row => ({ json: row }));"
+      },
+      "id": "code-build-timesheet",
+      "name": "Build Timesheet Rows",
+      "type": "n8n-nodes-base.code",
+      "position": [1060, 1980],
+      "typeVersion": 2
+    },
+
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "YOUR_GOOGLE_SHEET_ID"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Onboarding Timesheets"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {"id": "Employee Name", "displayName": "Employee Name", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": true},
+            {"id": "Employee Email", "displayName": "Employee Email", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Department", "displayName": "Department", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Position", "displayName": "Position", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Event Title", "displayName": "Event Title", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Date", "displayName": "Date", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Start Time", "displayName": "Start Time", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "End Time", "displayName": "End Time", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Duration (hrs)", "displayName": "Duration (hrs)", "type": "number", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Category", "displayName": "Category", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Status", "displayName": "Status", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false},
+            {"id": "Created On", "displayName": "Created On", "type": "string", "display": true, "required": false, "defaultMatch": false, "canBeUsedToMatch": false}
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "sheets-save-timesheet",
+      "name": "Save Timesheet to Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1280, 1980],
+      "typeVersion": 4.6,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+
+    {
+      "parameters": {
+        "chatId": "YOUR_HR_TELEGRAM_CHAT_ID",
+        "text": "=📅 *Onboarding Timesheet Created*\n\n👤 *Employee:* {{ $('Extract Onboarding Data').first().json.employeeName }}\n📧 *Email:* {{ $('Extract Onboarding Data').first().json.employeeEmail }}\n💼 *Position:* {{ $('Extract Onboarding Data').first().json.position }}\n📊 *Events Logged:* {{ $input.all().length }}\n\nTimesheet has been saved to Google Sheets. ✅",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "telegram-notify-timesheet",
+      "name": "Notify HR — Timesheet Ready",
+      "type": "n8n-nodes-base.telegram",
+      "position": [1500, 1980],
+      "typeVersion": 1.2,
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CRED_ID",
+          "name": "Telegram Bot account"
+        }
+      }
+    }
+  ],
+
+  "connections": {
+    "▶️ Start Setup (Run Once)": {
+      "main": [[{"node": "📝 Your Job Description", "type": "main", "index": 0}]]
+    },
+    "📝 Your Job Description": {
+      "main": [[{"node": "Prepare Interview Agent", "type": "main", "index": 0}]]
+    },
+    "Prepare Interview Agent": {
+      "main": [[{"node": "Create BeyondPresence Agent", "type": "main", "index": 0}]]
+    },
+    "Create BeyondPresence Agent": {
+      "main": [[{"node": "Save Agent Info", "type": "main", "index": 0}]]
+    },
+    "Save Agent Info": {
+      "main": [[{"node": "Save Agent to Sheets", "type": "main", "index": 0}]]
+    },
+    "📱 Telegram Resume Trigger": {
+      "main": [[{"node": "Has Resume Attached?", "type": "main", "index": 0}]]
+    },
+    "Has Resume Attached?": {
+      "main": [
+        [{"node": "Get File Path from Telegram", "type": "main", "index": 0}],
+        [{"node": "Ask for Resume", "type": "main", "index": 0}]
+      ]
+    },
+    "Get File Path from Telegram": {
+      "main": [[{"node": "Download Resume PDF", "type": "main", "index": 0}]]
+    },
+    "Download Resume PDF": {
+      "main": [[{"node": "Extract Text from PDF", "type": "main", "index": 0}]]
+    },
+    "Extract Text from PDF": {
+      "main": [[{"node": "Prepare Resume Data", "type": "main", "index": 0}]]
+    },
+    "Prepare Resume Data": {
+      "main": [[{"node": "🤖 Analyze Resume (GPT-4.1-mini)", "type": "main", "index": 0}]]
+    },
+    "🤖 Analyze Resume (GPT-4.1-mini)": {
+      "main": [[{"node": "Parse Resume Analysis", "type": "main", "index": 0}]]
+    },
+    "Parse Resume Analysis": {
+      "main": [[{"node": "Log Candidate to Sheets", "type": "main", "index": 0}]]
+    },
+    "Log Candidate to Sheets": {
+      "main": [[{"node": "Is Candidate Shortlisted?", "type": "main", "index": 0}]]
+    },
+    "Is Candidate Shortlisted?": {
+      "main": [
+        [{"node": "Send Interview Link (Shortlisted)", "type": "main", "index": 0}],
+        [{"node": "Send Rejection Message", "type": "main", "index": 0}]
+      ]
+    },
+    "Receive Interview Webhook": {
+      "main": [[{"node": "Confirm Receipt", "type": "main", "index": 0}]]
+    },
+    "Confirm Receipt": {
+      "main": [[{"node": "Data Checks", "type": "main", "index": 0}]]
+    },
+    "Data Checks": {
+      "main": [[{"node": "Is Our Interview?", "type": "main", "index": 0}]]
+    },
+    "Is Our Interview?": {
+      "main": [[{"node": "🤖 Analyze Interview (GPT-4.1-mini)", "type": "main", "index": 0}]]
+    },
+    "🤖 Analyze Interview (GPT-4.1-mini)": {
+      "main": [[{"node": "Format Interview Results", "type": "main", "index": 0}]]
+    },
+    "Format Interview Results": {
+      "main": [[{"node": "Save Interview Results to Sheets", "type": "main", "index": 0}]]
+    },
+    "Save Interview Results to Sheets": {
+      "main": [[{"node": "Offer Recommended?", "type": "main", "index": 0}]]
+    },
+    "Offer Recommended?": {
+      "main": [
+        [{"node": "Generate Offer Letter Content", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Generate Offer Letter Content": {
+      "main": [[{"node": "Prepare Offer Letter File", "type": "main", "index": 0}]]
+    },
+    "Prepare Offer Letter File": {
+      "main": [[{"node": "Send Offer via Telegram", "type": "main", "index": 0}]]
+    },
+    "📧 Gmail Onboarding Trigger": {
+      "main": [[{"node": "Extract Onboarding Data", "type": "main", "index": 0}]]
+    },
+    "Extract Onboarding Data": {
+      "main": [[{"node": "Fetch Google Calendar Events", "type": "main", "index": 0}]]
+    },
+    "Fetch Google Calendar Events": {
+      "main": [[{"node": "Build Timesheet Rows", "type": "main", "index": 0}]]
+    },
+    "Build Timesheet Rows": {
+      "main": [[{"node": "Save Timesheet to Sheets", "type": "main", "index": 0}]]
+    },
+    "Save Timesheet to Sheets": {
+      "main": [[{"node": "Notify HR — Timesheet Ready", "type": "main", "index": 0}]]
+    }
+  },
+
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ai-hr-automation-v1-2026",
+  "meta": {
+    "templateId": "ai-hr-automation-system",
+    "templateCredsSetupCompleted": false,
+    "instanceId": "ai-hr-automation-abubakr-2026"
+  },
+  "id": "ai-hr-automation-system",
+  "tags": ["HR", "AI", "Automation", "Telegram", "BeyondPresence", "OpenAI"]
+}
