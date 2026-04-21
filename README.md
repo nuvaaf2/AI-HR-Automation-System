@@ -7,6 +7,7 @@
 [![n8n](https://img.shields.io/badge/Built%20with-n8n-FF6D00?style=for-the-badge&logo=n8n&logoColor=white)](https://n8n.io)
 [![OpenAI](https://img.shields.io/badge/OpenAI-GPT--4.1-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com)
 [![Telegram](https://img.shields.io/badge/Telegram-Bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)](https://telegram.org)
+[![BeyondPresence](https://img.shields.io/badge/BeyondPresence.ai-AI%20Screening-6C3CE1?style=for-the-badge&logoColor=white)](https://beyondpresence.ai)
 
 *Candidates apply via Telegram, AI screens their resume, shortlists the best fits, and automatically schedules interviews — no HR team needed.*
 
