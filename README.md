@@ -43,6 +43,7 @@ This end-to-end HR automation pipeline replaces the manual, time-consuming parts
 | **Gmail API** | Sending interview & offer letter emails |
 | **Webhook** | Triggering workflow stages |
 | **PDF Parser** | Extracting text from resume PDFs |
+| **Beyond Presence API** | Uses an AI interviewer to take interviews |
 
 ---
 
