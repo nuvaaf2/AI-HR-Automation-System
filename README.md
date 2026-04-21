@@ -82,8 +82,8 @@ Onboarding workflow triggered
 
 1. **Clone this repository**
    ```bash
-   git clone https://github.com/nuvaaf2/ai-hr-automation.git
-   cd ai-hr-automation
+   git clone https://github.com/nuvaaf2/ai-hr-automation-system.git
+   cd ai-hr-automation-system
    ```
 
 2. **Import the workflow**
