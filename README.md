@@ -74,6 +74,7 @@ Onboarding workflow triggered
 - OpenAI API key
 - Telegram Bot Token (via [@BotFather](https://t.me/botfather))
 - Gmail account
+- Beyond Presence ([https://www.beyondpresence.ai](https://www.beyondpresence.ai/))
 
 ### Setup Steps
 
